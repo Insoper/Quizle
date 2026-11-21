@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scania Driver Competition</title>
+<style>
+:root{--navy:#0a2144;--blue:#1b5fc1;--bg:#eef1f5;--line:#cfd6e0;--ink:#16202e;--mute:#5b6778;--ok:#1d7a46;--bad:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+header{background:var(--navy);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header b{font-size:18px}
+#who{font-size:15px;font-weight:600}
+#who small{display:block;font-weight:400;opacity:.8;font-size:13px}
+#timer{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;background:#14336a;padding:4px 14px;border-radius:6px}
+#timer.low{background:var(--bad)}
+main{max-width:900px;margin:0 auto;padding:20px}
+[hidden]{display:none!important}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:24px}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{color:var(--mute);margin:0 0 18px}
+label{display:block;font-weight:600;font-size:14px;margin:14px 0 4px}
+input{width:100%;padding:11px 12px;font-size:16px;border:1px solid var(--line);border-radius:6px}
+input:focus,button:focus-visible{outline:3px solid #9fc3f5;outline-offset:1px}
+.btn{background:var(--blue);color:#fff;border:0;border-radius:6px;padding:12px 20px;font-size:16px;font-weight:600;cursor:pointer}
+.btn.alt{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+.btn.go{background:var(--ok)}
+.btn:disabled{opacity:.5;cursor:default}
+.err{color:var(--bad);margin-top:12px;min-height:22px;font-size:14px}
+.warn{background:#fff6e0;border:1px solid #e8c36a;border-radius:6px;padding:10px 12px;font-size:14px;margin:14px 0 0}
+.layout{display:grid;grid-template-columns:1fr 220px;gap:16px}
+@media(max-width:720px){.layout{grid-template-columns:1fr}}
+.qno{color:var(--mute);font-size:14px;margin-bottom:6px}
+.qtext{font-size:20px;font-weight:600;margin:0 0 14px;white-space:pre-wrap}
+.qimg{max-width:100%;max-height:320px;border-radius:6px;margin-bottom:14px;border:1px solid var(--line)}
+.opt{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:#fff;border:2px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:17px;cursor:pointer;color:var(--ink)}
+.opt:hover{border-color:#8fb2e6}
+.opt.on{border-color:var(--blue);background:#e8f0fc}
+.opt .k{flex:none;width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+.opt.on .k{background:var(--blue)}
+.opt img{max-width:100%;max-height:180px;border-radius:4px}
+.nav{display:flex;justify-content:space-between;gap:10px;margin-top:16px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.grid button{padding:8px 0;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;font-size:14px}
+.grid button.done{background:var(--navy);color:#fff;border-color:var(--navy)}
+.grid button.cur{outline:3px solid var(--blue);outline-offset:1px}
+.prog{font-size:14px;color:var(--mute);margin:0 0 10px}
+.score{font-size:56px;font-weight:700;color:var(--navy);margin:8px 0}
+.modal{position:fixed;inset:0;background:rgba(10,33,68,.6);display:grid;place-items:center;padding:20px;z-index:10}
+.modal .card{max-width:400px;width:100%}
+.modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+</style>
+</head>
+<body>
+<header>
+  <b>Scania Driver Competition</b>
+  <div id="who" hidden></div>
+  <div id="timer" hidden>00:00</div>
+</header>
+<main>
+  <section id="login" class="card" style="max-width:460px;margin:30px auto">
+    <h1>Masuk ujian</h1>
+    <p class="sub">Gunakan nama dan password dari panitia.</p>
+    <label for="nama">Nama</label><input id="nama" autocomplete="off">
+    <label for="pw">Password</label><input id="pw" type="password" autocomplete="off">
+    <div class="warn" id="rule">Selama ujian berlangsung, jangan pindah tab atau jendela. Jawaban akan terkirim otomatis dan ujian berakhir.</div>
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn" id="btnLogin" onclick="doLogin()">Mulai ujian</button>
+  </section>
+
+  <section id="exam" hidden>
+    <div class="layout">
+      <div class="card">
+        <div class="qno" id="qno"></div>
+        <h2 class="qtext" id="qtext"></h2>
+        <img class="qimg" id="qimg" alt="Gambar soal" hidden>
+        <div id="opts"></div>
+        <div class="nav">
+          <button class="btn alt" id="prev" onclick="go(-1)">Sebelumnya</button>
+          <button class="btn" id="next" onclick="go(1)">Berikutnya</button>
+          <button class="btn go" id="send" onclick="tanya()" hidden>Kirim jawaban</button>
+        </div>
+      </div>
+      <div class="card">
+        <p class="prog" id="prog"></p>
+        <div class="grid" id="grid"></div>
+        <p style="margin:16px 0 0"><button class="btn go" style="width:100%" onclick="tanya()">Kirim jawaban</button></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="done" class="card" style="max-width:460px;margin:30px auto" hidden>
+    <h1 id="doneTitle">Jawaban tersimpan</h1>
+    <p class="sub" id="doneWhy"></p>
+    <div id="result"></div>
+    <p class="sub" id="sisa"></p>
+    <button class="btn" id="retry" onclick="kirimUlang()" hidden>Kirim ulang</button>
+    <button class="btn" id="back" onclick="location.reload()">Kembali ke halaman masuk</button>
+  </section>
+</main>
+
+<div class="modal" id="confirm" hidden>
+  <div class="card" role="dialog" aria-modal="true">
+    <h1 style="font-size:19px" id="cTitle">Kirim jawaban?</h1>
+    <p class="sub" id="cText" style="margin:8px 0 0"></p>
+    <div class="row">
+      <button class="btn alt" onclick="$('confirm').hidden=true">Kembali mengerjakan</button>
+      <button class="btn go" onclick="$('confirm').hidden=true;selesai('')">Kirim</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Alamat web app Apps Script (hasil Deploy). Halaman ini bisa di-host di GitHub Pages.
+var API_URL = 'https://script.google.com/macros/s/AKfycbyqKZeiMTTG9MCsnivzHuwgAnUqTIdA01YPZ0yHDhKq4t9vK5u43zCZjVj3XH1AGT8B/exec';
+
+function api(fn, args){
+  return fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // tanpa preflight CORS
+    body: JSON.stringify({ fn: fn, args: args }),
+    keepalive: true                                           // tetap terkirim saat tab ditutup/ditinggalkan
+  }).then(function(r){ return r.json(); }).then(function(j){
+    if(j.error) throw new Error(j.error);
+    return j.result;
+  });
+}
+// Pengganti google.script.run supaya sisa kode tidak berubah.
+var google = { script: { run: (function mk(ok, fail){
+  return new Proxy({}, { get: function(_, name){
+    if(name === 'withSuccessHandler') return function(f){ return mk(f, fail); };
+    if(name === 'withFailureHandler') return function(f){ return mk(ok, f); };
+    return function(){
+      api(name, [].slice.call(arguments)).then(function(r){ if(ok) ok(r); }, function(e){ if(fail) fail(e); });
+    };
+  }});
+})(null, null) } };
+</script>
+<script>
+var S = null, sent = false, armed = false, timerId = null, lastWhy = '';
+function $(id){ return document.getElementById(id); }
+function show(id){ ['login','exam','done'].forEach(function(x){ $(x).hidden = (x !== id); }); }
+function err(m){ $('err').textContent = m || ''; }
+function busy(b){ $('btnLogin').disabled = b; $('btnLogin').textContent = b ? 'Memeriksa...' : 'Mulai ujian'; }
+
+function doLogin(){
+  var cred = { nama: $('nama').value, password: $('pw').value };
+  if(!cred.nama.trim() || !cred.password){ err('Isi nama dan password.'); return; }
+  err(''); busy(true);
+  google.script.run
+    .withSuccessHandler(function(r){
+      busy(false);
+      if(!r.ok){ err(r.msg); return; }
+      S = { token: r.token, soal: r.soal, jawab: r.soal.map(function(){ return null; }), i: 0,
+            end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan };
+      var w = $('who'); w.innerHTML = ''; w.hidden = false;
+      w.appendChild(document.createTextNode(r.nama));
+      var sm = document.createElement('small'); sm.textContent = r.perusahaan; w.appendChild(sm);
+      $('timer').hidden = false;
+      window.onbeforeunload = function(){ return 'Ujian sedang berjalan.'; };
+      show('exam'); render(); tick();
+      timerId = setInterval(tick, 500);
+      setTimeout(function(){ armed = true; }, 2000);
+    })
+    .withFailureHandler(function(e){ busy(false); err('Gagal terhubung: ' + e.message); })
+    .login(cred);
+}
+
+function fmt(s){ var m = Math.floor(s / 60), d = s % 60; return (m < 10 ? '0' : '') + m + ':' + (d < 10 ? '0' : '') + d; }
+function tick(){
+  if(!S || sent) return;
+  var left = Math.max(0, Math.round((S.end - Date.now()) / 1000));
+  $('timer').textContent = fmt(left);
+  $('timer').className = left <= 300 ? 'low' : '';
+  if(left <= 0) selesai('waktu habis');
+}
+
+function render(){
+  var s = S.soal[S.i], n = S.soal.length;
+  $('qno').textContent = 'Soal ' + (S.i + 1) + ' dari ' + n;
+  $('qtext').textContent = s.teks;
+  var qi = $('qimg'); qi.hidden = !s.gambar; if(s.gambar) qi.src = s.gambar;
+  var box = $('opts'); box.innerHTML = '';
+  s.opsi.forEach(function(o){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'opt' + (S.jawab[S.i] === o.k ? ' on' : '');
+    var k = document.createElement('span'); k.className = 'k'; k.textContent = o.k; b.appendChild(k);
+    if(o.img){ var im = document.createElement('img'); im.src = o.img; im.alt = 'Opsi ' + o.k; b.appendChild(im); }
+    else { var t = document.createElement('span'); t.textContent = o.teks; b.appendChild(t); }
+    b.onclick = function(){ S.jawab[S.i] = o.k; render(); };
+    box.appendChild(b);
+  });
+  $('prog').textContent = 'Terjawab ' + S.jawab.filter(function(x){ return x; }).length + ' dari ' + n;
+  var g = $('grid'); g.innerHTML = '';
+  S.soal.forEach(function(_, idx){
+    var c = document.createElement('button');
+    c.type = 'button'; c.textContent = idx + 1;
+    c.className = (S.jawab[idx] ? 'done ' : '') + (idx === S.i ? 'cur' : '');
+    c.onclick = function(){ S.i = idx; render(); };
+    g.appendChild(c);
+  });
+  $('prev').disabled = S.i === 0;
+  $('next').hidden = S.i === n - 1;
+  $('send').hidden = S.i !== n - 1;
+}
+function go(d){ S.i = Math.min(Math.max(S.i + d, 0), S.soal.length - 1); render(); window.scrollTo(0, 0); }
+
+// Konfirmasi manual memakai panel di halaman (bukan confirm() bawaan browser, agar tidak memicu auto-submit).
+function tanya(){
+  var kosong = S.jawab.filter(function(x){ return !x; }).length;
+  $('cText').textContent = kosong ? kosong + ' soal belum dijawab. Jawaban tidak bisa diubah setelah dikirim.' : 'Jawaban tidak bisa diubah setelah dikirim.';
+  $('confirm').hidden = false;
+}
+
+// Auto-submit tanpa konfirmasi saat peserta pindah tab / jendela / aplikasi.
+function leave(){ if(armed && S && S.auto && !sent) selesai('pindah tab/jendela'); }
+document.addEventListener('visibilitychange', function(){ if(document.hidden) leave(); });
+window.addEventListener('blur', leave);
+window.addEventListener('pagehide', leave);
+
+function selesai(alasan){
+  if(sent) return;
+  sent = true; lastWhy = alasan;
+  clearInterval(timerId);
+  window.onbeforeunload = null;
+  $('confirm').hidden = true;
+  $('timer').hidden = true;
+  $('doneTitle').textContent = 'Mengirim jawaban...';
+  $('doneWhy').textContent = alasan === 'waktu habis' ? 'Waktu pengerjaan habis.' :
+    alasan ? 'Anda meninggalkan halaman ujian, jawaban dikirim otomatis.' : '';
+  $('result').innerHTML = ''; $('sisa').textContent = '';
+  $('back').hidden = true; $('retry').hidden = true;
+  show('done');
+  kirim(alasan, 0);
+}
+
+function kirim(alasan, n){
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r.ok){ gagal(r.msg); return; }
+      $('doneTitle').textContent = 'Jawaban tersimpan';
+      var res = $('result');
+      if(r.nilai !== undefined){
+        var d = document.createElement('div'); d.className = 'score'; d.textContent = r.nilai;
+        var p = document.createElement('p'); p.className = 'sub'; p.textContent = r.benar + ' benar dari ' + r.total + ' soal';
+        res.appendChild(d); res.appendChild(p);
+      }
+      $('sisa').textContent = r.sisaPercobaan > 0 ? 'Sisa kesempatan: ' + r.sisaPercobaan : 'Kesempatan mengerjakan sudah habis.';
+      $('back').hidden = false;
+    })
+    .withFailureHandler(function(e){
+      if(n < 3){ setTimeout(function(){ kirim(alasan, n + 1); }, 2000); return; }
+      gagal(e.message);
+    })
+    .submit(S.token, S.jawab, alasan);
+}
+function gagal(m){
+  $('doneTitle').textContent = 'Jawaban belum terkirim';
+  $('sisa').textContent = m + ' Pastikan koneksi internet aktif, lalu tekan Kirim ulang.';
+  $('retry').hidden = false;
+}
+function kirimUlang(){ $('retry').hidden = true; $('doneTitle').textContent = 'Mengirim jawaban...'; kirim(lastWhy, 0); }
+</script>
+</body>
+</html>
