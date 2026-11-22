@@ -105,6 +105,8 @@ input.bad{border-color:var(--bad)}
         <div class="grid" id="grid"></div>
         <p style="margin:16px 0 0"><button class="btn go" style="width:100%" onclick="tanya()">Kirim jawaban</button></p>
         <p class="saved" id="saved"></p>
+        <p class="saved" id="imgst"></p>
+        <button type="button" class="btn alt" id="imgbtn" style="padding:6px 10px;font-size:13px" onclick="pramuat()" hidden>Muat ulang gambar</button>
       </div>
     </div>
   </section>
@@ -252,6 +254,69 @@ function mulai(){
   setTimeout(function(){ if(!sent) tick(); }, Math.max(0, S.end - Date.now()) + 300);
   setTimeout(function(){ armed = true; }, 2000);
   kirimAntrian();   // kirim jawaban yang belum sempat terkirim sebelum refresh
+  imgRun = false; pramuat();
+}
+
+
+// ===== Pramuat gambar: semua gambar dimuat di latar belakang, yang gagal dicoba lagi otomatis =====
+var imgOK = {}, imgTry = {}, imgWait = {}, imgTimer = null, imgRun = false;
+function srcOf(u){ return imgOK[u] || u; }
+function muatGambar(u, done){
+  var n = imgTry[u] || 0;
+  var url = n ? u + (u.indexOf('?') < 0 ? '?' : '&') + 'r=' + n : u;   // ganti alamat agar tidak memakai hasil gagal dari cache
+  var im = new Image();
+  im.onload = function(){ imgOK[u] = url; done(true); };
+  im.onerror = function(){
+    imgTry[u] = n + 1;
+    if(n < 5) setTimeout(function(){ muatGambar(u, done); }, 1500 * (n + 1));
+    else done(false);
+  };
+  im.src = url;
+}
+function semuaGambar(){
+  var seen = {}, a = [];
+  S.soal.forEach(function(s){
+    [s.gambar].concat(s.opsi.map(function(o){ return o.img; })).forEach(function(u){
+      if(u && !seen[u]){ seen[u] = 1; a.push(u); }
+    });
+  });
+  return a;
+}
+function gambarGagal(u){   // gambar yang sedang tampil gagal: muat ulang lalu tampilkan lagi
+  if(!S || sent || (imgWait[u] && Date.now() - imgWait[u] < 5000)) return;
+  imgWait[u] = Date.now();
+  muatGambar(u, function(ok){ if(ok && S && !sent) render(); });
+}
+function pramuat(){
+  if(!S || sent || imgRun) return;
+  var all = semuaGambar(); if(!all.length) return;
+  var q = all.filter(function(u){ return !imgOK[u]; });
+  var st = $('imgst'), bt = $('imgbtn');
+  function upd(){
+    var ok = all.filter(function(u){ return imgOK[u]; }).length;
+    st.textContent = ok === all.length ? '' : 'Memuat gambar ' + ok + ' dari ' + all.length + '...';
+  }
+  if(!q.length){ st.textContent = ''; bt.hidden = true; return; }
+  imgRun = true; bt.hidden = true;
+  var aktif = 0, gagal = 0;
+  function next(){
+    if(!S || sent){ imgRun = false; return; }
+    while(aktif < 3 && q.length){
+      (function(u){
+        aktif++; imgTry[u] = 0;
+        muatGambar(u, function(ok){ aktif--; if(!ok) gagal++; upd(); next(); });
+      })(q.shift());
+    }
+    if(!aktif && !q.length){
+      imgRun = false;
+      if(gagal){
+        st.textContent = gagal + ' gambar belum termuat, dicoba lagi otomatis...';
+        bt.hidden = false;
+        clearTimeout(imgTimer); imgTimer = setTimeout(pramuat, 10000);
+      } else upd();
+    }
+  }
+  upd(); next();
 }
 
 // ===== Simpan per soal (langsung ke spreadsheet tiap pilih jawaban) =====
@@ -304,7 +369,7 @@ function autosave(){
 }
 // Begitu sinyal kembali, langsung simpan ke server.
 window.addEventListener('online', function(){
-  if(S && !sent){ autosave(); kirimAntrian(); }
+  if(S && !sent){ autosave(); kirimAntrian(); pramuat(); }
   else if(sent && !$('retry').hidden) kirimUlang();
 });
 
@@ -321,7 +386,8 @@ function render(){
   var s = S.soal[S.i], n = S.soal.length;
   $('qno').textContent = 'Soal ' + (S.i + 1) + ' dari ' + n;
   $('qtext').textContent = s.teks;
-  var qi = $('qimg'); qi.hidden = !s.gambar; if(s.gambar) qi.src = s.gambar;
+  var qi = $('qimg'); qi.hidden = !s.gambar;
+  if(s.gambar){ qi.onerror = function(){ gambarGagal(s.gambar); }; qi.src = srcOf(s.gambar); }
   var box = $('opts'); box.innerHTML = '';
   s.opsi.forEach(function(o, pos){
     var huruf = String.fromCharCode(65 + pos);
@@ -330,7 +396,7 @@ function render(){
     b.className = 'opt' + (S.jawab[S.i] === o.k ? ' on' : '');
     if(S.jawab[S.i]) b.disabled = true;   // sudah dijawab: tidak bisa diganti
     var k = document.createElement('span'); k.className = 'k'; k.textContent = huruf; b.appendChild(k);
-    if(o.img){ var im = document.createElement('img'); im.src = o.img; im.alt = 'Opsi ' + huruf; b.appendChild(im); }
+    if(o.img){ var im = document.createElement('img'); im.onerror = function(){ gambarGagal(o.img); }; im.src = srcOf(o.img); im.alt = 'Opsi ' + huruf; b.appendChild(im); }
     else { var t = document.createElement('span'); t.textContent = o.teks; b.appendChild(t); }
     b.onclick = function(){ pilih(s, o.k); };
     box.appendChild(b);
