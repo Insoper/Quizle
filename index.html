@@ -44,6 +44,9 @@ input.bad{border-color:var(--bad)}
 .opt{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:#fff;border:2px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:17px;cursor:pointer;color:var(--ink)}
 .opt:hover{border-color:#8fb2e6}
 .opt.on{border-color:var(--blue);background:#e8f0fc}
+.opt:disabled{cursor:default}
+.opt:disabled:not(.on){opacity:.5}
+.opt:disabled:not(.on):hover{border-color:var(--line)}
 .opt .k{flex:none;width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
 .opt.on .k{background:var(--blue)}
 .opt img{max-width:100%;max-height:180px;border-radius:4px}
@@ -217,7 +220,7 @@ function doLogin(){
       }));
       S = { token: r.token, soal: acak, jawab: acak.map(function(){ return null; }), i: 0,
             end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan,
-            nama: r.nama, perusahaan: r.perusahaan };
+            nama: r.nama, perusahaan: r.perusahaan, antrian: {} };
       sent = false; lastWhy = '';
       $('pw').value = ''; $('pw').type = 'password';
       simpanLokal();
@@ -229,6 +232,7 @@ function doLogin(){
 
 // Menampilkan layar ujian (dipakai saat login baru maupun saat dipulihkan setelah refresh).
 function mulai(){
+  S.antrian = S.antrian || {};
   var w = $('who'); w.innerHTML = ''; w.hidden = false;
   w.appendChild(document.createTextNode(S.nama || ''));
   var sm = document.createElement('small'); sm.textContent = S.perusahaan || ''; w.appendChild(sm);
@@ -241,6 +245,40 @@ function mulai(){
   // Cadangan: kirim tepat saat waktu habis walau interval tertahan browser.
   setTimeout(function(){ if(!sent) tick(); }, Math.max(0, S.end - Date.now()) + 300);
   setTimeout(function(){ armed = true; }, 2000);
+  kirimAntrian();   // kirim jawaban yang belum sempat terkirim sebelum refresh
+}
+
+// ===== Simpan per soal (langsung ke spreadsheet tiap pilih jawaban) =====
+var mengirim = false, antrianId = null;
+function status(m){ $('saved').textContent = m; }
+function pilih(s, k){
+  if(S.jawab[S.i]) return;       // jawaban pertama final, tidak bisa diganti
+  S.jawab[S.i] = k;
+  S.antrian[s.idx] = k;          // idx = nomor soal ASLI, k = jawaban yang dipilih
+  render();
+  kirimAntrian();
+  var cur = S.i;                 // gaya Quizizz: otomatis lanjut ke soal berikutnya
+  if(cur < S.soal.length - 1) setTimeout(function(){ if(S && !sent && S.i === cur) go(1); }, 600);
+}
+function kirimAntrian(){
+  if(!S || sent || mengirim) return;
+  var keys = Object.keys(S.antrian || {});
+  if(!keys.length){ status('Semua jawaban tersimpan ✓ ' + jam()); return; }
+  var idx = keys[0], k = S.antrian[idx];
+  mengirim = true; status('Menyimpan...');
+  google.script.run
+    .withSuccessHandler(function(){
+      mengirim = false;
+      if(!S || sent) return;
+      if(S.antrian[idx] === k) delete S.antrian[idx];   // kalau diganti lagi saat mengirim, tetap di antrian
+      simpanLokal(); kirimAntrian();
+    })
+    .withFailureHandler(function(){
+      mengirim = false;
+      status('Sinyal bermasalah, jawaban dikirim ulang otomatis...');
+      clearTimeout(antrianId); antrianId = setTimeout(kirimAntrian, 4000);
+    })
+    .jawab(S.token, Number(idx), k);
 }
 
 // ===== Auto save tiap 5 menit =====
@@ -259,7 +297,7 @@ function autosave(){
 }
 // Begitu sinyal kembali, langsung simpan ke server.
 window.addEventListener('online', function(){
-  if(S && !sent) autosave();
+  if(S && !sent){ autosave(); kirimAntrian(); }
   else if(sent && !$('retry').hidden) kirimUlang();
 });
 
@@ -283,10 +321,11 @@ function render(){
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'opt' + (S.jawab[S.i] === o.k ? ' on' : '');
+    if(S.jawab[S.i]) b.disabled = true;   // sudah dijawab: tidak bisa diganti
     var k = document.createElement('span'); k.className = 'k'; k.textContent = huruf; b.appendChild(k);
     if(o.img){ var im = document.createElement('img'); im.src = o.img; im.alt = 'Opsi ' + huruf; b.appendChild(im); }
     else { var t = document.createElement('span'); t.textContent = o.teks; b.appendChild(t); }
-    b.onclick = function(){ S.jawab[S.i] = o.k; render(); };
+    b.onclick = function(){ pilih(s, o.k); };
     box.appendChild(b);
   });
   $('prog').textContent = 'Terjawab ' + S.jawab.filter(function(x){ return x; }).length + ' dari ' + n;
