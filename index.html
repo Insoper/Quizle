@@ -132,7 +132,7 @@ input.bad{border-color:var(--bad)}
 
 <script>
 // Alamat web app Apps Script (hasil Deploy). Halaman ini bisa di-host di GitHub Pages.
-var API_URL = 'https://script.google.com/macros/s/AKfycbyuEDgUfb_ZI4JDKr2rQrh0yygR47_F6b2EqlC6A1f3IMCAc-uLhy5jqHj9EmLLGSql/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbyw8Cyy3oZLq0CHSCe2vlr7QK98ddj6w6kMGN3kI28Mq-6mTeiIRj2b3Ywbym12dr23/exec';
 
 function api(fn, args){
   return fetch(API_URL, {
@@ -242,7 +242,7 @@ function mulai(){
   clearInterval(timerId); clearInterval(autoId);
   timerId = setInterval(tick, 500);
   autoId = setInterval(autosave, AUTOSAVE_MS);
-  // Cadangan: kirim tepat saat waktu habis walau interval tertahan browser.
+  // Cadangan: tutup ujian tepat saat waktu habis walau interval tertahan browser.
   setTimeout(function(){ if(!sent) tick(); }, Math.max(0, S.end - Date.now()) + 300);
   setTimeout(function(){ armed = true; }, 2000);
   kirimAntrian();   // kirim jawaban yang belum sempat terkirim sebelum refresh
@@ -253,6 +253,7 @@ var mengirim = false, antrianId = null;
 function status(m){ $('saved').textContent = m; }
 function pilih(s, k){
   if(S.jawab[S.i]) return;       // jawaban pertama final, tidak bisa diganti
+  if(Date.now() >= S.end) return; // waktu sudah habis, jawaban baru tidak dihitung
   S.jawab[S.i] = k;
   S.antrian[s.idx] = k;          // idx = nomor soal ASLI, k = jawaban yang dipilih
   render();
@@ -374,8 +375,8 @@ function tampilKirim(alasan){
   window.onbeforeunload = null;
   $('confirm').hidden = true;
   $('timer').hidden = true;
-  $('doneTitle').textContent = 'Mengirim jawaban...';
-  $('doneWhy').textContent = alasan === 'waktu habis' ? 'Waktu pengerjaan habis.' :
+  $('doneTitle').textContent = alasan === 'waktu habis' ? 'Menghitung nilai...' : 'Mengirim jawaban...';
+  $('doneWhy').textContent = alasan === 'waktu habis' ? 'Waktu pengerjaan habis. Nilai dihitung dari jawaban yang sudah Anda pilih.' :
     alasan ? 'Anda meninggalkan halaman ujian, jawaban dikirim otomatis.' : '';
   $('result').innerHTML = ''; $('sisa').textContent = '';
   $('back').hidden = true; $('retry').hidden = true;
@@ -384,7 +385,10 @@ function tampilKirim(alasan){
 
 function selesai(alasan){
   if(sent) return;
-  sent = true; lastWhy = alasan; S.final = jawabAsli();
+  sent = true; lastWhy = alasan;
+  // Waktu habis: jawaban tidak dikirim ulang. Server menilai dari jawaban per soal yang sudah tersimpan:
+  // nilai = jumlah benar / total soal x 100.
+  S.final = (alasan === 'waktu habis') ? null : jawabAsli();
   simpanLokal();   // tersimpan sebagai "menunggu terkirim": kalau gagal/refresh, akan dikirim ulang
   tampilKirim(alasan);
   kirim(alasan, 0);
@@ -424,7 +428,7 @@ function kirim(alasan, n){
     .submit(S.token, S.final, alasan);
 }
 function gagal(m, jaringan){
-  $('doneTitle').textContent = 'Jawaban belum terkirim';
+  $('doneTitle').textContent = lastWhy === 'waktu habis' ? 'Nilai belum diterima' : 'Jawaban belum terkirim';
   $('sisa').textContent = (m || '') + ' Pastikan koneksi internet aktif, lalu tekan Kirim ulang.';
   $('retry').hidden = false;
   // Gangguan sinyal: coba kirim ulang otomatis tiap 15 detik sampai berhasil.
@@ -433,7 +437,7 @@ function gagal(m, jaringan){
 }
 function kirimUlang(){
   clearTimeout(retryId);
-  $('retry').hidden = true; $('doneTitle').textContent = 'Mengirim jawaban...';
+  $('retry').hidden = true; $('doneTitle').textContent = lastWhy === 'waktu habis' ? 'Menghitung nilai...' : 'Mengirim jawaban...';
   kirim(lastWhy, 0);
 }
 
@@ -448,12 +452,13 @@ function kirimUlang(){
   S = d.S;
   if(d.sent){                       // sudah waktunya kirim tapi belum berhasil -> kirim ulang
     sent = true; lastWhy = d.why || '';
-    if(!S.final) S.final = jawabAsli();
+    if(lastWhy !== 'waktu habis' && !S.final) S.final = jawabAsli();
+    if(lastWhy === 'waktu habis') S.final = null;
     tampilKirim(lastWhy);
     kirim(lastWhy, 0);
     return;
   }
-  if(S.end <= Date.now()){          // waktu habis selagi halaman tertutup -> kirim otomatis
+  if(S.end <= Date.now()){          // waktu habis selagi halaman tertutup -> tutup ujian & ambil nilai
     selesai('waktu habis');
     return;
   }
