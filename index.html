@@ -539,7 +539,9 @@ function kirimUlang(){
 // ===== Pulihkan sesi saat halaman dibuka / di-refresh =====
 (function pulihkan(){
   var raw = null, d = null;
-  if(/[?&]reset=1/.test(location.search)){ hapusLokal(); try{ localStorage.removeItem(KEY2); }catch(e){} return; }
+  if(/[?&]reset=1/.test(location.search)){ hapusLokal(); try{ localStorage.removeItem(KEY2); }catch(e){}
+    try{ history.replaceState(null, '', location.pathname); }catch(e){}   // buang ?reset=1 supaya refresh berikutnya tidak mereset lagi
+    return; }
   var k2 = null;
   try{ k2 = JSON.parse(localStorage.getItem(KEY2)); }catch(e){}
   if(k2){ tampilTerkunci(k2); return; }   // jalan keluar: buka alamat?reset=1
