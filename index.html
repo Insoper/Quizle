@@ -184,12 +184,27 @@ function togglePw(){
 });
 
 // ===== Penyimpanan lokal (bertahan saat refresh) =====
+var tuntas = false;   // true setelah sesi selesai & dihapus: mencegah pagehide menyimpan ulang
 function simpanLokal(){
-  if(!S) return;
+  if(!S || tuntas) return;
   try{ localStorage.setItem(KEY, JSON.stringify({ S: S, sent: sent, why: lastWhy })); }catch(e){}
 }
-function hapusLokal(){ try{ localStorage.removeItem(KEY); }catch(e){} }
+function hapusLokal(){ tuntas = true; try{ localStorage.removeItem(KEY); }catch(e){} }
 var KEY2 = 'scania_terkunci_v1';
+
+// ===== Tahan layar tetap menyala selama ujian (layar redup/tidur dianggap meninggalkan halaman) =====
+var wl = null;
+function kunciLayar(){
+  try{
+    if(!('wakeLock' in navigator) || !S || sent || wl || document.hidden) return;
+    navigator.wakeLock.request('screen').then(function(l){
+      wl = l;
+      l.addEventListener('release', function(){ if(wl === l) wl = null; });
+    }).catch(function(){});
+  }catch(e){}
+}
+function lepasLayar(){ try{ if(wl){ wl.release(); wl = null; } }catch(e){} }
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) kunciLayar(); });
 
 // Acak (Fisher-Yates) memakai crypto agar tiap peserta & tiap buka berbeda.
 function rnd(n){ return crypto.getRandomValues(new Uint32Array(1))[0] % n; }
@@ -230,7 +245,7 @@ function doLogin(){
         var pertama = S.jawab.indexOf(null);
         S.i = pertama < 0 ? 0 : pertama;
       }
-      sent = false; lastWhy = '';
+      sent = false; lastWhy = ''; tuntas = false;
       $('pw').value = ''; $('pw').type = 'password';
       simpanLokal();
       mulai();
@@ -256,6 +271,7 @@ function mulai(){
   setTimeout(function(){ armed = true; }, 2000);
   kirimAntrian();   // kirim jawaban yang belum sempat terkirim sebelum refresh
   imgRun = false; pramuat();
+  kunciLayar();
 }
 
 
@@ -444,7 +460,7 @@ window.addEventListener('blur', function(){
 window.addEventListener('pagehide', function(){ simpanLokal(); });
 
 function tampilKirim(alasan){
-  clearInterval(timerId); clearInterval(autoId);
+  clearInterval(timerId); clearInterval(autoId); lepasLayar();
   window.onbeforeunload = null;
   $('confirm').hidden = true;
   $('timer').hidden = true;
