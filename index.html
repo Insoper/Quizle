@@ -115,7 +115,7 @@ input.bad{border-color:var(--bad)}
     <div id="result"></div>
     <p class="sub" id="sisa"></p>
     <button class="btn" id="retry" onclick="kirimUlang()" hidden>Kirim ulang</button>
-    <button class="btn" id="back" onclick="location.reload()">Kembali ke halaman masuk</button>
+    <button class="btn" id="back" onclick="hapusLokal();location.reload()">Kembali ke halaman masuk</button>
   </section>
 </main>
 
@@ -393,7 +393,18 @@ function selesai(alasan){
 function kirim(alasan, n){
   google.script.run
     .withSuccessHandler(function(r){
-      if(!r.ok){ gagal(r.msg, false); return; }
+      if(!r.ok){
+        if(/sudah (dikirim|selesai|tersimpan)/i.test(r.msg || '')){   // server sudah punya jawabannya
+          hapusLokal();
+          $('doneTitle').textContent = 'Jawaban sudah tersimpan';
+          $('sisa').textContent = r.msg;
+          $('retry').hidden = true; $('back').hidden = false;
+          return;
+        }
+        gagal(r.msg, false);
+        $('back').hidden = false;   // supaya peserta tidak terjebak di layar ini
+        return;
+      }
       hapusLokal();
       $('doneTitle').textContent = 'Jawaban tersimpan';
       var res = $('result'); res.innerHTML = '';
@@ -429,6 +440,7 @@ function kirimUlang(){
 // ===== Pulihkan sesi saat halaman dibuka / di-refresh =====
 (function pulihkan(){
   var raw = null, d = null;
+  if(/[?&]reset=1/.test(location.search)){ hapusLokal(); return; }   // jalan keluar: buka alamat?reset=1
   try{ raw = localStorage.getItem(KEY); }catch(e){}
   if(!raw) return;
   try{ d = JSON.parse(raw); }catch(e){}
