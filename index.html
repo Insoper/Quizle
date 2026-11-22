@@ -189,24 +189,7 @@ function simpanLokal(){
   try{ localStorage.setItem(KEY, JSON.stringify({ S: S, sent: sent, why: lastWhy })); }catch(e){}
 }
 function hapusLokal(){ try{ localStorage.removeItem(KEY); }catch(e){} }
-// Auto-submit karena pindah tab/jendela: layar akhir "terkunci", tidak ada tombol kembali ke login (bertahan saat refresh).
-var KEY2 = 'scania_terkunci_v1', TAB = 'pindah tab/jendela';
-function kunci(o){ try{ localStorage.setItem(KEY2, JSON.stringify(o)); }catch(e){} }
-function tampilTerkunci(o){
-  window.onbeforeunload = null;
-  $('timer').hidden = true;
-  $('doneTitle').textContent = o.title || 'Jawaban tersimpan';
-  $('doneWhy').textContent = 'Anda meninggalkan halaman ujian, jawaban dikirim otomatis.';
-  var res = $('result'); res.innerHTML = '';
-  if(o.nilai !== undefined){
-    var d = document.createElement('div'); d.className = 'score'; d.textContent = o.nilai;
-    var p = document.createElement('p'); p.className = 'sub'; p.textContent = o.benar + ' benar dari ' + o.total + ' soal';
-    res.appendChild(d); res.appendChild(p);
-  }
-  $('sisa').textContent = o.sisa || '';
-  $('retry').hidden = true; $('back').hidden = true;
-  show('done');
-}
+var KEY2 = 'scania_terkunci_v1';
 
 // Acak (Fisher-Yates) memakai crypto agar tiap peserta & tiap buka berbeda.
 function rnd(n){ return crypto.getRandomValues(new Uint32Array(1))[0] % n; }
@@ -493,7 +476,6 @@ function kirim(alasan, n){
           $('doneTitle').textContent = 'Jawaban sudah tersimpan';
           $('sisa').textContent = r.msg;
           $('retry').hidden = true; $('back').hidden = false;
-          if(alasan === TAB){ $('back').hidden = true; kunci({ title: 'Jawaban sudah tersimpan', sisa: r.msg }); }
           return;
         }
         gagal(r.msg, false);
@@ -511,10 +493,6 @@ function kirim(alasan, n){
       $('sisa').textContent = r.sisaPercobaan > 0 ? 'Sisa kesempatan: ' + r.sisaPercobaan : 'Kesempatan mengerjakan sudah habis.';
       $('retry').hidden = true;
       $('back').hidden = false;
-      if(alasan === TAB){
-        $('back').hidden = true;
-        kunci({ title: 'Jawaban tersimpan', nilai: r.nilai, benar: r.benar, total: r.total, sisa: $('sisa').textContent });
-      }
     })
     .withFailureHandler(function(e){
       if(n < 3){ setTimeout(function(){ kirim(alasan, n + 1); }, 2000); return; }
@@ -542,9 +520,7 @@ function kirimUlang(){
   if(/[?&]reset=1/.test(location.search)){ hapusLokal(); try{ localStorage.removeItem(KEY2); }catch(e){}
     try{ history.replaceState(null, '', location.pathname); }catch(e){}   // buang ?reset=1 supaya refresh berikutnya tidak mereset lagi
     return; }
-  var k2 = null;
-  try{ k2 = JSON.parse(localStorage.getItem(KEY2)); }catch(e){}
-  if(k2){ tampilTerkunci(k2); return; }   // jalan keluar: buka alamat?reset=1
+  try{ localStorage.removeItem(KEY2); }catch(e){}   // sisa kunci dari versi sebelumnya   // jalan keluar: buka alamat?reset=1
   try{ raw = localStorage.getItem(KEY); }catch(e){}
   if(!raw) return;
   try{ d = JSON.parse(raw); }catch(e){}
