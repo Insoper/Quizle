@@ -132,7 +132,7 @@ input.bad{border-color:var(--bad)}
 
 <script>
 // Alamat web app Apps Script (hasil Deploy). Halaman ini bisa di-host di GitHub Pages.
-var API_URL = 'https://script.google.com/macros/s/AKfycbyw8Cyy3oZLq0CHSCe2vlr7QK98ddj6w6kMGN3kI28Mq-6mTeiIRj2b3Ywbym12dr23/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbz624ekp-0lzwjgyqHUGAB8AvfJoxWBlO7U6iQamJ9F4k5OWa89rByqScOm7zOrllkH/exec';
 
 function api(fn, args){
   return fetch(API_URL, {
@@ -221,6 +221,12 @@ function doLogin(){
       S = { token: r.token, soal: acak, jawab: acak.map(function(){ return null; }), i: 0,
             end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan,
             nama: r.nama, perusahaan: r.perusahaan, antrian: {} };
+      // Login ulang ke sesi yang masih berjalan: tandai soal yang sudah tersimpan di server.
+      if(r.jawaban){
+        acak.forEach(function(q, i){ if(r.jawaban[q.idx]) S.jawab[i] = r.jawaban[q.idx]; });
+        var pertama = S.jawab.indexOf(null);
+        S.i = pertama < 0 ? 0 : pertama;
+      }
       sent = false; lastWhy = '';
       $('pw').value = ''; $('pw').type = 'password';
       simpanLokal();
@@ -449,6 +455,9 @@ function kirimUlang(){
   if(!raw) return;
   try{ d = JSON.parse(raw); }catch(e){}
   if(!d || !d.S || !d.S.token || !d.S.soal){ hapusLokal(); return; }
+  // Buka halaman baru (bukan refresh) = mulai dari login. Pengiriman yang masih tertunda tetap dilanjutkan.
+  var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+  if(!d.sent && nav.type === 'navigate'){ hapusLokal(); return; }
   S = d.S;
   if(d.sent){                       // sudah waktunya kirim tapi belum berhasil -> kirim ulang
     sent = true; lastWhy = d.why || '';
