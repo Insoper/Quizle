@@ -132,7 +132,7 @@ input.bad{border-color:var(--bad)}
 
 <script>
 // Alamat web app Apps Script (hasil Deploy). Halaman ini bisa di-host di GitHub Pages.
-var API_URL = 'https://script.google.com/macros/s/AKfycbz624ekp-0lzwjgyqHUGAB8AvfJoxWBlO7U6iQamJ9F4k5OWa89rByqScOm7zOrllkH/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbzvu_-Psi8Z0XcauObxgTTgWlwPNNk056XVOZRNL0ti4jU9KGBQzSLrQLdI6JQzN4oF/exec';
 
 function api(fn, args){
   return fetch(API_URL, {
@@ -455,9 +455,6 @@ function kirimUlang(){
   if(!raw) return;
   try{ d = JSON.parse(raw); }catch(e){}
   if(!d || !d.S || !d.S.token || !d.S.soal){ hapusLokal(); return; }
-  // Buka halaman baru (bukan refresh) = mulai dari login. Pengiriman yang masih tertunda tetap dilanjutkan.
-  var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
-  if(!d.sent && nav.type === 'navigate'){ hapusLokal(); return; }
   S = d.S;
   if(d.sent){                       // sudah waktunya kirim tapi belum berhasil -> kirim ulang
     sent = true; lastWhy = d.why || '';
