@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scania Driver Competition 2026</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
 <style>
 :root{--navy:#0a2144;--blue:#1b5fc1;--bg:#eef1f5;--line:#cfd6e0;--ink:#16202e;--mute:#5b6778;--ok:#1d7a46;--bad:#b3261e}
 *{box-sizing:border-box}
@@ -58,6 +60,9 @@ input.bad{border-color:var(--bad)}
 .prog{font-size:14px;color:var(--mute);margin:0 0 10px}
 .saved{font-size:12px;color:var(--mute);margin:10px 0 0}
 .score{font-size:56px;font-weight:700;color:var(--navy);margin:8px 0}
+.spin{display:inline-block;width:1em;height:1em;border:.15em solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-.15em;margin-right:.5em}
+.spinbig{width:48px;height:48px;border:5px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 0 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
 .modal{position:fixed;inset:0;background:rgba(10,33,68,.6);display:grid;place-items:center;padding:20px;z-index:10}
 .modal .card{max-width:400px;width:100%}
 .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
@@ -112,6 +117,7 @@ input.bad{border-color:var(--bad)}
   </section>
 
   <section id="done" class="card" style="max-width:460px;margin:30px auto" hidden>
+    <div class="spinbig" id="loading" role="status" aria-label="Memuat" hidden></div>
     <h1 id="doneTitle">Jawaban tersimpan</h1>
     <p class="sub" id="doneWhy"></p>
     <div id="result"></div>
@@ -134,7 +140,9 @@ input.bad{border-color:var(--bad)}
 
 <script>
 // Alamat web app Apps Script (hasil Deploy). Halaman ini bisa di-host di GitHub Pages.
-var API_URL = 'https://script.google.com/macros/s/AKfycbzvu_-Psi8Z0XcauObxgTTgWlwPNNk056XVOZRNL0ti4jU9KGBQzSLrQLdI6JQzN4oF/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbw49WQ72r98-iH5zaa46oggwzNNPRG5w-OfJI3Jb6cnG7Y9DyMiSDMppCgumMUBO7ap/exec';
+
+try{ fetch(API_URL, { mode: 'no-cors' }); }catch(e){}   // bangunkan server Apps Script sebelum peserta login
 
 function api(fn, args){
   return fetch(API_URL, {
@@ -219,7 +227,7 @@ function jawabAsli(){
   S.soal.forEach(function(q, i){ a[q.idx] = S.jawab[i]; });
   return a;
 }
-function busy(b){ $('btnLogin').disabled = b; $('btnLogin').textContent = b ? 'Memeriksa...' : 'Mulai ujian'; }
+function busy(b){ var t = $('btnLogin'); t.disabled = b; t.innerHTML = b ? '<span class="spin"></span>Memeriksa...' : 'Mulai ujian'; }
 
 function doLogin(){
   var cred = { nama: $('nama').value, password: $('pw').value };
@@ -338,7 +346,11 @@ function pramuat(){
 
 // ===== Simpan per soal (langsung ke spreadsheet tiap pilih jawaban) =====
 var mengirim = false, antrianId = null;
-function status(m){ $('saved').textContent = m; }
+function status(m, load){
+  var e = $('saved'); e.textContent = '';
+  if(load){ var s = document.createElement('span'); s.className = 'spin'; e.appendChild(s); }
+  e.appendChild(document.createTextNode(m));
+}
 function pilih(s, k){
   if(S.jawab[S.i]) return;       // jawaban pertama final, tidak bisa diganti
   if(Date.now() >= S.end) return; // waktu sudah habis, jawaban baru tidak dihitung
@@ -354,7 +366,7 @@ function kirimAntrian(){
   var keys = Object.keys(S.antrian || {});
   if(!keys.length){ status('Semua jawaban tersimpan ✓ ' + jam()); return; }
   var idx = keys[0], k = S.antrian[idx];
-  mengirim = true; status('Menyimpan...');
+  mengirim = true; status('Menyimpan...', true);
   google.script.run
     .withSuccessHandler(function(){
       mengirim = false;
@@ -459,6 +471,7 @@ window.addEventListener('blur', function(){
 });
 window.addEventListener('pagehide', function(){ simpanLokal(); });
 
+function muter(b){ $('loading').hidden = !b; }
 function tampilKirim(alasan){
   clearInterval(timerId); clearInterval(autoId); lepasLayar();
   window.onbeforeunload = null;
@@ -469,6 +482,7 @@ function tampilKirim(alasan){
     alasan ? 'Anda meninggalkan halaman ujian, jawaban dikirim otomatis.' : '';
   $('result').innerHTML = ''; $('sisa').textContent = '';
   $('back').hidden = true; $('retry').hidden = true;
+  muter(true);
   show('done');
 }
 
@@ -486,6 +500,7 @@ function selesai(alasan){
 function kirim(alasan, n){
   google.script.run
     .withSuccessHandler(function(r){
+      muter(false);
       if(!r.ok){
         if(/sudah (dikirim|selesai|tersimpan)/i.test(r.msg || '')){   // server sudah punya jawabannya
           hapusLokal();
@@ -517,6 +532,7 @@ function kirim(alasan, n){
     .submit(S.token, S.final, alasan);
 }
 function gagal(m, jaringan){
+  muter(false);
   $('doneTitle').textContent = lastWhy === 'waktu habis' ? 'Nilai belum diterima' : 'Jawaban belum terkirim';
   $('sisa').textContent = (m || '') + ' Pastikan koneksi internet aktif, lalu tekan Kirim ulang.';
   $('retry').hidden = false;
@@ -526,7 +542,7 @@ function gagal(m, jaringan){
 }
 function kirimUlang(){
   clearTimeout(retryId);
-  $('retry').hidden = true; $('doneTitle').textContent = lastWhy === 'waktu habis' ? 'Menghitung nilai...' : 'Mengirim jawaban...';
+  $('retry').hidden = true; muter(true); $('doneTitle').textContent = lastWhy === 'waktu habis' ? 'Menghitung nilai...' : 'Mengirim jawaban...';
   kirim(lastWhy, 0);
 }
 
