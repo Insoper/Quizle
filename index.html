@@ -53,6 +53,7 @@ input.bad{border-color:var(--bad)}
 .grid button.done{background:var(--navy);color:#fff;border-color:var(--navy)}
 .grid button.cur{outline:3px solid var(--blue);outline-offset:1px}
 .prog{font-size:14px;color:var(--mute);margin:0 0 10px}
+.saved{font-size:12px;color:var(--mute);margin:10px 0 0}
 .score{font-size:56px;font-weight:700;color:var(--navy);margin:8px 0}
 .modal{position:fixed;inset:0;background:rgba(10,33,68,.6);display:grid;place-items:center;padding:20px;z-index:10}
 .modal .card{max-width:400px;width:100%}
@@ -100,6 +101,7 @@ input.bad{border-color:var(--bad)}
         <p class="prog" id="prog"></p>
         <div class="grid" id="grid"></div>
         <p style="margin:16px 0 0"><button class="btn go" style="width:100%" onclick="tanya()">Kirim jawaban</button></p>
+        <p class="saved" id="saved"></p>
       </div>
     </div>
   </section>
@@ -152,7 +154,9 @@ var google = { script: { run: (function mk(ok, fail){
 })(null, null) } };
 </script>
 <script>
-var S = null, sent = false, armed = false, timerId = null, lastWhy = '';
+var S = null, sent = false, armed = false, timerId = null, autoId = null, retryId = null, lastWhy = '';
+var KEY = 'scania_sesi_v1';
+var AUTOSAVE_MS = 5 * 60 * 1000;
 function $(id){ return document.getElementById(id); }
 function show(id){ ['login','exam','done'].forEach(function(x){ $(x).hidden = (x !== id); }); }
 function err(m, bad){
@@ -173,6 +177,14 @@ function togglePw(){
   $(id).addEventListener('input', function(){ if($('err').textContent) err(''); });
   $(id).addEventListener('keydown', function(e){ if(e.key === 'Enter' && !$('btnLogin').disabled) doLogin(); });
 });
+
+// ===== Penyimpanan lokal (bertahan saat refresh) =====
+function simpanLokal(){
+  if(!S) return;
+  try{ localStorage.setItem(KEY, JSON.stringify({ S: S, sent: sent, why: lastWhy })); }catch(e){}
+}
+function hapusLokal(){ try{ localStorage.removeItem(KEY); }catch(e){} }
+
 // Acak (Fisher-Yates) memakai crypto agar tiap peserta & tiap buka berbeda.
 function rnd(n){ return crypto.getRandomValues(new Uint32Array(1))[0] % n; }
 function shuffle(a){
@@ -204,20 +216,52 @@ function doLogin(){
         c.idx = idx; c.opsi = shuffle(q.opsi); return c;
       }));
       S = { token: r.token, soal: acak, jawab: acak.map(function(){ return null; }), i: 0,
-            end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan };
-      var w = $('who'); w.innerHTML = ''; w.hidden = false;
-      w.appendChild(document.createTextNode(r.nama));
-      var sm = document.createElement('small'); sm.textContent = r.perusahaan; w.appendChild(sm);
-      $('timer').hidden = false;
+            end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan,
+            nama: r.nama, perusahaan: r.perusahaan };
+      sent = false; lastWhy = '';
       $('pw').value = ''; $('pw').type = 'password';
-      window.onbeforeunload = function(){ return 'Ujian sedang berjalan.'; };
-      show('exam'); render(); tick();
-      timerId = setInterval(tick, 500);
-      setTimeout(function(){ armed = true; }, 2000);
+      simpanLokal();
+      mulai();
     })
     .withFailureHandler(function(e){ busy(false); err('Gagal terhubung ke server. Periksa koneksi internet lalu coba lagi. (' + e.message + ')'); })
     .login(cred);
 }
+
+// Menampilkan layar ujian (dipakai saat login baru maupun saat dipulihkan setelah refresh).
+function mulai(){
+  var w = $('who'); w.innerHTML = ''; w.hidden = false;
+  w.appendChild(document.createTextNode(S.nama || ''));
+  var sm = document.createElement('small'); sm.textContent = S.perusahaan || ''; w.appendChild(sm);
+  $('timer').hidden = false;
+  window.onbeforeunload = function(){ return 'Ujian sedang berjalan.'; };
+  show('exam'); render(); tick();
+  clearInterval(timerId); clearInterval(autoId);
+  timerId = setInterval(tick, 500);
+  autoId = setInterval(autosave, AUTOSAVE_MS);
+  // Cadangan: kirim tepat saat waktu habis walau interval tertahan browser.
+  setTimeout(function(){ if(!sent) tick(); }, Math.max(0, S.end - Date.now()) + 300);
+  setTimeout(function(){ armed = true; }, 2000);
+}
+
+// ===== Auto save tiap 5 menit =====
+function jam(){ var d = new Date(), p = function(n){ return (n < 10 ? '0' : '') + n; }; return p(d.getHours()) + ':' + p(d.getMinutes()); }
+function autosave(){
+  if(!S || sent) return;
+  simpanLokal();
+  $('saved').textContent = 'Tersimpan di perangkat ' + jam();
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r && r.ok === false) return;
+      $('saved').textContent = 'Tersimpan otomatis ' + jam();
+    })
+    .withFailureHandler(function(){ /* sinyal hilang: dicoba lagi pada siklus berikutnya */ })
+    .simpan(S.token, jawabAsli(), S.i);
+}
+// Begitu sinyal kembali, langsung simpan ke server.
+window.addEventListener('online', function(){
+  if(S && !sent) autosave();
+  else if(sent && !$('retry').hidden) kirimUlang();
+});
 
 function fmt(s){ var m = Math.floor(s / 60), d = s % 60; return (m < 10 ? '0' : '') + m + ':' + (d < 10 ? '0' : '') + d; }
 function tick(){
@@ -257,6 +301,7 @@ function render(){
   $('prev').disabled = S.i === 0;
   $('next').hidden = S.i === n - 1;
   $('send').hidden = S.i !== n - 1;
+  simpanLokal();   // setiap jawaban/pindah nomor langsung tersimpan di perangkat
 }
 function go(d){ S.i = Math.min(Math.max(S.i + d, 0), S.soal.length - 1); render(); window.scrollTo(0, 0); }
 
@@ -267,16 +312,26 @@ function tanya(){
   $('confirm').hidden = false;
 }
 
-// Auto-submit tanpa konfirmasi saat peserta pindah tab / jendela / aplikasi.
-function leave(){ if(armed && S && S.auto && !sent) selesai('pindah tab/jendela'); }
-document.addEventListener('visibilitychange', function(){ if(document.hidden) leave(); });
-window.addEventListener('blur', leave);
-window.addEventListener('pagehide', leave);
+// Auto-submit saat peserta pindah tab / jendela / aplikasi.
+// Refresh TIDAK dianggap pindah tab: pengecekan ditunda sebentar (saat refresh halaman sudah hilang
+// sebelum pengecekan jalan), dan pagehide hanya menyimpan data.
+var pendingLeave = false;
+function leave(){ pendingLeave = false; if(armed && S && S.auto && !sent) selesai('pindah tab/jendela'); }
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden){
+    pendingLeave = true;
+    setTimeout(function(){ if(pendingLeave) leave(); }, 700);
+  } else if(pendingLeave){
+    leave();   // timer sempat dibekukan browser (mis. pindah aplikasi di HP)
+  }
+});
+window.addEventListener('blur', function(){
+  setTimeout(function(){ if(!document.hasFocus()) leave(); }, 700);
+});
+window.addEventListener('pagehide', function(){ simpanLokal(); });
 
-function selesai(alasan){
-  if(sent) return;
-  sent = true; lastWhy = alasan; S.final = jawabAsli();
-  clearInterval(timerId);
+function tampilKirim(alasan){
+  clearInterval(timerId); clearInterval(autoId);
   window.onbeforeunload = null;
   $('confirm').hidden = true;
   $('timer').hidden = true;
@@ -286,35 +341,73 @@ function selesai(alasan){
   $('result').innerHTML = ''; $('sisa').textContent = '';
   $('back').hidden = true; $('retry').hidden = true;
   show('done');
+}
+
+function selesai(alasan){
+  if(sent) return;
+  sent = true; lastWhy = alasan; S.final = jawabAsli();
+  simpanLokal();   // tersimpan sebagai "menunggu terkirim": kalau gagal/refresh, akan dikirim ulang
+  tampilKirim(alasan);
   kirim(alasan, 0);
 }
 
 function kirim(alasan, n){
   google.script.run
     .withSuccessHandler(function(r){
-      if(!r.ok){ gagal(r.msg); return; }
+      if(!r.ok){ gagal(r.msg, false); return; }
+      hapusLokal();
       $('doneTitle').textContent = 'Jawaban tersimpan';
-      var res = $('result');
+      var res = $('result'); res.innerHTML = '';
       if(r.nilai !== undefined){
         var d = document.createElement('div'); d.className = 'score'; d.textContent = r.nilai;
         var p = document.createElement('p'); p.className = 'sub'; p.textContent = r.benar + ' benar dari ' + r.total + ' soal';
         res.appendChild(d); res.appendChild(p);
       }
       $('sisa').textContent = r.sisaPercobaan > 0 ? 'Sisa kesempatan: ' + r.sisaPercobaan : 'Kesempatan mengerjakan sudah habis.';
+      $('retry').hidden = true;
       $('back').hidden = false;
     })
     .withFailureHandler(function(e){
       if(n < 3){ setTimeout(function(){ kirim(alasan, n + 1); }, 2000); return; }
-      gagal(e.message);
+      gagal(e.message, true);
     })
     .submit(S.token, S.final, alasan);
 }
-function gagal(m){
+function gagal(m, jaringan){
   $('doneTitle').textContent = 'Jawaban belum terkirim';
-  $('sisa').textContent = m + ' Pastikan koneksi internet aktif, lalu tekan Kirim ulang.';
+  $('sisa').textContent = (m || '') + ' Pastikan koneksi internet aktif, lalu tekan Kirim ulang.';
   $('retry').hidden = false;
+  // Gangguan sinyal: coba kirim ulang otomatis tiap 15 detik sampai berhasil.
+  clearTimeout(retryId);
+  if(jaringan) retryId = setTimeout(kirimUlang, 15000);
 }
-function kirimUlang(){ $('retry').hidden = true; $('doneTitle').textContent = 'Mengirim jawaban...'; kirim(lastWhy, 0); }
+function kirimUlang(){
+  clearTimeout(retryId);
+  $('retry').hidden = true; $('doneTitle').textContent = 'Mengirim jawaban...';
+  kirim(lastWhy, 0);
+}
+
+// ===== Pulihkan sesi saat halaman dibuka / di-refresh =====
+(function pulihkan(){
+  var raw = null, d = null;
+  try{ raw = localStorage.getItem(KEY); }catch(e){}
+  if(!raw) return;
+  try{ d = JSON.parse(raw); }catch(e){}
+  if(!d || !d.S || !d.S.token || !d.S.soal){ hapusLokal(); return; }
+  S = d.S;
+  if(d.sent){                       // sudah waktunya kirim tapi belum berhasil -> kirim ulang
+    sent = true; lastWhy = d.why || '';
+    if(!S.final) S.final = jawabAsli();
+    tampilKirim(lastWhy);
+    kirim(lastWhy, 0);
+    return;
+  }
+  if(S.end <= Date.now()){          // waktu habis selagi halaman tertutup -> kirim otomatis
+    selesai('waktu habis');
+    return;
+  }
+  mulai();                          // lanjut dari nomor terakhir
+})();
 </script>
 </body>
 </html>
