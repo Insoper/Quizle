@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scania Driver Competition</title>
+<title>Scania Driver Competition 2026</title>
 <style>
 :root{--navy:#0a2144;--blue:#1b5fc1;--bg:#eef1f5;--line:#cfd6e0;--ink:#16202e;--mute:#5b6778;--ok:#1d7a46;--bad:#b3261e}
 *{box-sizing:border-box}
@@ -27,6 +27,14 @@ input:focus,button:focus-visible{outline:3px solid #9fc3f5;outline-offset:1px}
 .btn.go{background:var(--ok)}
 .btn:disabled{opacity:.5;cursor:default}
 .err{color:var(--bad);margin-top:12px;min-height:22px;font-size:14px}
+.err.show{background:#fdecea;border:1px solid #f2b8b5;border-radius:6px;padding:10px 12px;font-weight:600}
+input.bad{border-color:var(--bad)}
+.pwwrap{position:relative}
+.pwwrap input{padding-right:48px}
+.eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:42px;height:42px;background:none;border:0;border-radius:6px;cursor:pointer;color:var(--mute);display:grid;place-items:center}
+.eye:hover{color:var(--blue)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.shake{animation:shake .4s}
 .warn{background:#fff6e0;border:1px solid #e8c36a;border-radius:6px;padding:10px 12px;font-size:14px;margin:14px 0 0}
 .layout{display:grid;grid-template-columns:1fr 220px;gap:16px}
 @media(max-width:720px){.layout{grid-template-columns:1fr}}
@@ -62,7 +70,14 @@ input:focus,button:focus-visible{outline:3px solid #9fc3f5;outline-offset:1px}
     <h1>Masuk ujian</h1>
     <p class="sub">Gunakan nama dan password dari panitia.</p>
     <label for="nama">Nama</label><input id="nama" autocomplete="off">
-    <label for="pw">Password</label><input id="pw" type="password" autocomplete="off">
+    <label for="pw">Password</label>
+    <div class="pwwrap">
+      <input id="pw" type="password" autocomplete="off">
+      <button type="button" class="eye" id="eye" aria-label="Tampilkan password" aria-pressed="false" title="Tampilkan password" onclick="togglePw()">
+        <svg id="eyeOn" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="eyeOff" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.9 10.9 0 0 1 12 19c-7 0-11-7-11-7a19.8 19.8 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 4c7 0 11 7 11 7a19.9 19.9 0 0 1-3.17 4.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+      </button>
+    </div>
     <div class="warn" id="rule">Selama ujian berlangsung, jangan pindah tab atau jendela. Jawaban akan terkirim otomatis dan ujian berakhir.</div>
     <div class="err" id="err" role="alert"></div>
     <button class="btn" id="btnLogin" onclick="doLogin()">Mulai ujian</button>
@@ -140,29 +155,67 @@ var google = { script: { run: (function mk(ok, fail){
 var S = null, sent = false, armed = false, timerId = null, lastWhy = '';
 function $(id){ return document.getElementById(id); }
 function show(id){ ['login','exam','done'].forEach(function(x){ $(x).hidden = (x !== id); }); }
-function err(m){ $('err').textContent = m || ''; }
+function err(m, bad){
+  var e = $('err'); e.textContent = m || ''; e.className = 'err' + (m ? ' show' : '');
+  ['nama','pw'].forEach(function(id){ $(id).classList.toggle('bad', !!(m && bad)); });
+  if(m && bad){ var c = $('login'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
+}
+function togglePw(){
+  var p = $('pw'), show = p.type === 'password';
+  p.type = show ? 'text' : 'password';
+  $('eyeOn').hidden = show; $('eyeOff').hidden = !show;
+  var b = $('eye'); b.setAttribute('aria-pressed', show);
+  b.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Tampilkan password');
+  b.title = b.getAttribute('aria-label');
+  p.focus();
+}
+['nama','pw'].forEach(function(id){
+  $(id).addEventListener('input', function(){ if($('err').textContent) err(''); });
+  $(id).addEventListener('keydown', function(e){ if(e.key === 'Enter' && !$('btnLogin').disabled) doLogin(); });
+});
+// Acak (Fisher-Yates) memakai crypto agar tiap peserta & tiap buka berbeda.
+function rnd(n){ return crypto.getRandomValues(new Uint32Array(1))[0] % n; }
+function shuffle(a){
+  a = a.slice();
+  for(var i = a.length - 1; i > 0; i--){ var j = rnd(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+// Jawaban dikirim dengan urutan soal ASLI (server menilai berdasarkan urutan & kunci asli).
+function jawabAsli(){
+  var a = S.soal.map(function(){ return null; });
+  S.soal.forEach(function(q, i){ a[q.idx] = S.jawab[i]; });
+  return a;
+}
 function busy(b){ $('btnLogin').disabled = b; $('btnLogin').textContent = b ? 'Memeriksa...' : 'Mulai ujian'; }
 
 function doLogin(){
   var cred = { nama: $('nama').value, password: $('pw').value };
-  if(!cred.nama.trim() || !cred.password){ err('Isi nama dan password.'); return; }
+  if(!cred.nama.trim() || !cred.password){ err('Isi nama dan password.', true); return; }
   err(''); busy(true);
   google.script.run
     .withSuccessHandler(function(r){
       busy(false);
-      if(!r.ok){ err(r.msg); return; }
-      S = { token: r.token, soal: r.soal, jawab: r.soal.map(function(){ return null; }), i: 0,
+      if(!r || !r.ok){
+        err((r && r.msg) || 'Nama atau password tidak terdaftar. Periksa kembali penulisan nama dan password Anda.', true);
+        $('pw').select(); return;
+      }
+      var acak = shuffle(r.soal.map(function(q, idx){
+        var c = {}; for(var k in q) c[k] = q[k];
+        c.idx = idx; c.opsi = shuffle(q.opsi); return c;
+      }));
+      S = { token: r.token, soal: acak, jawab: acak.map(function(){ return null; }), i: 0,
             end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan };
       var w = $('who'); w.innerHTML = ''; w.hidden = false;
       w.appendChild(document.createTextNode(r.nama));
       var sm = document.createElement('small'); sm.textContent = r.perusahaan; w.appendChild(sm);
       $('timer').hidden = false;
+      $('pw').value = ''; $('pw').type = 'password';
       window.onbeforeunload = function(){ return 'Ujian sedang berjalan.'; };
       show('exam'); render(); tick();
       timerId = setInterval(tick, 500);
       setTimeout(function(){ armed = true; }, 2000);
     })
-    .withFailureHandler(function(e){ busy(false); err('Gagal terhubung: ' + e.message); })
+    .withFailureHandler(function(e){ busy(false); err('Gagal terhubung ke server. Periksa koneksi internet lalu coba lagi. (' + e.message + ')'); })
     .login(cred);
 }
 
@@ -181,12 +234,13 @@ function render(){
   $('qtext').textContent = s.teks;
   var qi = $('qimg'); qi.hidden = !s.gambar; if(s.gambar) qi.src = s.gambar;
   var box = $('opts'); box.innerHTML = '';
-  s.opsi.forEach(function(o){
+  s.opsi.forEach(function(o, pos){
+    var huruf = String.fromCharCode(65 + pos);
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'opt' + (S.jawab[S.i] === o.k ? ' on' : '');
-    var k = document.createElement('span'); k.className = 'k'; k.textContent = o.k; b.appendChild(k);
-    if(o.img){ var im = document.createElement('img'); im.src = o.img; im.alt = 'Opsi ' + o.k; b.appendChild(im); }
+    var k = document.createElement('span'); k.className = 'k'; k.textContent = huruf; b.appendChild(k);
+    if(o.img){ var im = document.createElement('img'); im.src = o.img; im.alt = 'Opsi ' + huruf; b.appendChild(im); }
     else { var t = document.createElement('span'); t.textContent = o.teks; b.appendChild(t); }
     b.onclick = function(){ S.jawab[S.i] = o.k; render(); };
     box.appendChild(b);
@@ -221,7 +275,7 @@ window.addEventListener('pagehide', leave);
 
 function selesai(alasan){
   if(sent) return;
-  sent = true; lastWhy = alasan;
+  sent = true; lastWhy = alasan; S.final = jawabAsli();
   clearInterval(timerId);
   window.onbeforeunload = null;
   $('confirm').hidden = true;
@@ -253,7 +307,7 @@ function kirim(alasan, n){
       if(n < 3){ setTimeout(function(){ kirim(alasan, n + 1); }, 2000); return; }
       gagal(e.message);
     })
-    .submit(S.token, S.jawab, alasan);
+    .submit(S.token, S.final, alasan);
 }
 function gagal(m){
   $('doneTitle').textContent = 'Jawaban belum terkirim';
