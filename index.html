@@ -140,7 +140,7 @@ input.bad{border-color:var(--bad)}
 
 <script>
 // Alamat web app Apps Script (hasil Deploy). Halaman ini bisa di-host di GitHub Pages.
-var API_URL = 'https://script.google.com/macros/s/AKfycbxIdUAkO6XEy_Oq3ub8IaZ1eR58K6Ao9hfBt6A1Kpgkl5YKgQnvQsPza2JSN5benHt9/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbwtzOKeUh4zcZrgO6u6Jt6Bm77rdtLDdObHbC-lkJbuiDn6CsnYLwu8xRtYZurI7pRN/exec';
 
 try{ fetch(API_URL, { mode: 'no-cors' }); }catch(e){}   // bangunkan server Apps Script sebelum peserta login
 
@@ -246,7 +246,7 @@ function doLogin(){
       }));
       S = { token: r.token, soal: acak, jawab: acak.map(function(){ return null; }), i: 0,
             end: Date.now() + r.sisaDetik * 1000, auto: r.autoSubmit, maks: r.maks, sisa: r.sisaPercobaan,
-            nama: r.nama, perusahaan: r.perusahaan, antrian: {} };
+            nama: r.nama, perusahaan: r.perusahaan, kategori: r.kategori, antrian: {} };
       // Login ulang ke sesi yang masih berjalan: tandai soal yang sudah tersimpan di server.
       if(r.jawaban){
         acak.forEach(function(q, i){ if(r.jawaban[q.idx]) S.jawab[i] = r.jawaban[q.idx]; });
@@ -267,7 +267,7 @@ function mulai(){
   S.antrian = S.antrian || {};
   var w = $('who'); w.innerHTML = ''; w.hidden = false;
   w.appendChild(document.createTextNode(S.nama || ''));
-  var sm = document.createElement('small'); sm.textContent = S.perusahaan || ''; w.appendChild(sm);
+  var sm = document.createElement('small'); sm.textContent = (S.perusahaan || '') + (S.kategori ? ' · ' + S.kategori : ''); w.appendChild(sm);
   $('timer').hidden = false;
   window.onbeforeunload = function(){ return 'Ujian sedang berjalan.'; };
   show('exam'); render(); tick();
