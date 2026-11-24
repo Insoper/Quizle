@@ -28,6 +28,9 @@ input:focus,button:focus-visible{outline:3px solid #9fc3f5;outline-offset:1px}
 .btn.alt{background:#fff;color:var(--blue);border:1px solid var(--blue)}
 .btn.go{background:var(--ok)}
 .btn:disabled{opacity:.5;cursor:default}
+#btnLogin:disabled{background:#b4bcc8;color:#eef1f5;opacity:1;cursor:not-allowed}
+.agree{display:flex;align-items:flex-start;gap:10px;margin:10px 0 0;font-weight:600;font-size:14px;cursor:pointer}
+.agree input{flex:none;width:20px;height:20px;padding:0;margin:1px 0 0;accent-color:var(--blue);cursor:pointer}
 .err{color:var(--bad);margin-top:12px;min-height:22px;font-size:14px}
 .err.show{background:#fdecea;border:1px solid #f2b8b5;border-radius:6px;padding:10px 12px;font-weight:600}
 input.bad{border-color:var(--bad)}
@@ -142,8 +145,9 @@ input.bad{border-color:var(--bad)}
         </button>
       </div>
       <div class="warn" id="rule">Selama ujian berlangsung, jangan pindah tab atau jendela. Jawaban akan terkirim otomatis dan ujian berakhir.</div>
+      <label class="agree" for="agree"><input type="checkbox" id="agree"><span>Saya sudah membaca dan memahami konsekuensi di atas.</span></label>
       <div class="err" id="err" role="alert"></div>
-      <button class="btn" id="btnLogin" onclick="doLogin()">Mulai ujian</button>
+      <button class="btn" id="btnLogin" onclick="doLogin()" disabled>Mulai ujian</button>
     </div>
   </section>
 
@@ -241,6 +245,7 @@ function togglePw(){
   b.title = b.getAttribute('aria-label');
   p.focus();
 }
+$('agree').addEventListener('change', function(){ $('btnLogin').disabled = !this.checked; });
 ['nama','pw'].forEach(function(id){
   $(id).addEventListener('input', function(){ if($('err').textContent) err(''); });
   $(id).addEventListener('keydown', function(e){ if(e.key === 'Enter' && !$('btnLogin').disabled) doLogin(); });
@@ -282,9 +287,10 @@ function jawabAsli(){
   S.soal.forEach(function(q, i){ a[q.idx] = S.jawab[i]; });
   return a;
 }
-function busy(b){ var t = $('btnLogin'); t.disabled = b; t.innerHTML = b ? '<span class="spin"></span>Memeriksa...' : 'Mulai ujian'; }
+function busy(b){ var t = $('btnLogin'); t.disabled = b || !$('agree').checked; t.innerHTML = b ? '<span class="spin"></span>Memeriksa...' : 'Mulai ujian'; }
 
 function doLogin(){
+  if(!$('agree').checked) return;
   var cred = { nama: $('nama').value, password: $('pw').value };
   if(!cred.nama.trim() || !cred.password){ err('Isi nama dan password.', true); return; }
   err(''); busy(true);
@@ -309,7 +315,7 @@ function doLogin(){
         S.i = pertama < 0 ? 0 : pertama;
       }
       sent = false; lastWhy = ''; tuntas = false;
-      $('pw').value = ''; $('pw').type = 'password';
+      $('pw').value = ''; $('pw').type = 'password'; $('agree').checked = false;
       simpanLokal();
       mulai();
     })
