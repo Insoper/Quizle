@@ -9,14 +9,14 @@
 <style>
 :root{--navy:#0a2144;--blue:#1b5fc1;--bg:#eef1f5;--line:#cfd6e0;--ink:#16202e;--mute:#5b6778;--ok:#1d7a46;--bad:#b3261e}
 *{box-sizing:border-box}
-body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+body{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
 header{background:var(--navy);color:#fff;padding:10px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 header b{font-size:18px}
 #who{font-size:15px;font-weight:600}
 #who small{display:block;font-weight:400;opacity:.8;font-size:13px}
 #timer{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;background:#14336a;padding:4px 14px;border-radius:6px}
 #timer.low{background:var(--bad)}
-main{max-width:900px;margin:0 auto;padding:20px}
+main{flex:1;width:100%;max-width:1000px;margin:0 auto;padding:20px;display:flex;flex-direction:column}
 [hidden]{display:none!important}
 .card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:24px}
 h1{font-size:22px;margin:0 0 4px}
@@ -38,7 +38,7 @@ input.bad{border-color:var(--bad)}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .shake{animation:shake .4s}
 .warn{background:#fff6e0;border:1px solid #e8c36a;border-radius:6px;padding:10px 12px;font-size:14px;margin:14px 0 0}
-.layout{display:grid;grid-template-columns:1fr 220px;gap:16px}
+.layout{width:100%;max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr 220px;gap:16px}
 @media(max-width:720px){.layout{grid-template-columns:1fr}}
 .qno{color:var(--mute);font-size:14px;margin-bottom:6px}
 .qtext{font-size:20px;font-weight:600;margin:0 0 14px;white-space:pre-wrap}
@@ -76,7 +76,7 @@ input.bad{border-color:var(--bad)}
 .logos img{width:auto;display:block}
 
 /* ===== Halaman login: panel foto + form ===== */
-.loginwrap{display:grid;grid-template-columns:1.05fr 1fr;max-width:980px;margin:16px auto;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(10,33,68,.18);background:#fff}
+.loginwrap{display:grid;grid-template-columns:1.05fr 1fr;width:100%;max-width:980px;margin:auto;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(10,33,68,.18);background:#fff}
 .hero{background:linear-gradient(160deg,#0a2144,#1b5fc1);color:#fff;padding:28px;display:flex;flex-direction:column;gap:18px}
 .hero h2{font-size:26px;margin:0 0 6px;line-height:1.2}
 .hero p{margin:0;opacity:.85}
@@ -89,7 +89,7 @@ input.bad{border-color:var(--bad)}
   header{padding:8px 12px}
   header .brand b{display:none}
   .logos .ut img{height:28px}.logos .sc img{height:19px}.logos .lg{height:38px;padding:0 8px}
-  .loginwrap{grid-template-columns:1fr;margin:0 auto;border-radius:12px}
+  .loginwrap{grid-template-columns:1fr;margin:auto;border-radius:12px}
   .hero{padding:14px 16px;gap:10px}
   .hero h2{font-size:18px;margin:0}
   .hero p{display:none}
@@ -171,7 +171,7 @@ input.bad{border-color:var(--bad)}
     </div>
   </section>
 
-  <section id="done" class="card" style="max-width:460px;margin:30px auto" hidden>
+  <section id="done" class="card" style="width:100%;max-width:460px;margin:auto" hidden>
     <div class="spinbig" id="loading" role="status" aria-label="Memuat" hidden></div>
     <h1 id="doneTitle">Jawaban tersimpan</h1>
     <p class="sub" id="doneWhy"></p>
